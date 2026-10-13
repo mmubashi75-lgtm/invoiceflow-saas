@@ -8,16 +8,16 @@
 function env(key, fallback) {
   fallback = fallback || '';
   try {
-    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key] != null) {
-      return import.meta.env[key];
+    if (typeof window !== 'undefined' && window.__ENV__ && window.__ENV__[key]) {
+      return window.__ENV__[key];
     }
   } catch (_) {}
   return fallback;
 }
 
 const CONFIG = {
-  SUPABASE_URL: env('VITE_SUPABASE_URL', 'https://ijkenjbnddcphojwsmhz.supabase.co'),
-  SUPABASE_ANON_KEY: env('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqa2VuamJuZGRjcGhvandzbWh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjI4NjEsImV4cCI6MjEwNzAzODg2MX0.ABeWwkp-u-Y2Fl_xz0IbmQ0Al4kbX10Sxmjyu9vIGwQ'),
+  SUPABASE_URL: 'VITE_SUPABASE_URL', 'https://ijkenjbnddcphojwsmhz.supabase.co',
+  SUPABASE_ANON_KEY: 'VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqa2VuamJuZGRjcGhvandzbWh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjI4NjEsImV4cCI6MjEwNzAzODg2MX0.ABeWwkp-u-Y2Fl_xz0IbmQ0Al4kbX10Sxmjyu9vIGwQ',
 
   PADDLE_CLIENT_TOKEN: env('VITE_PADDLE_CLIENT_TOKEN', 'live_e9bb7ce58e3ef32a6dca1daee0c'),
   PADDLE_ENVIRONMENT: env('VITE_PADDLE_ENVIRONMENT', 'production'),
@@ -30,7 +30,7 @@ const CONFIG = {
   TRIAL_DAYS: 7,
   SUPPORT_EMAIL: env('VITE_SUPPORT_EMAIL', 'mmubashi75@gmail.com')
 };
-
+window.CONFIG = CONFIG;
 /**
  * Plan limits — enforced in the app
  * -1 = unlimited
