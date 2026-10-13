@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoiceFlow — SaaS Invoice Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@paddle/paddle-js@1"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+  <!-- AUTH SCREENS -->
+  <div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white text-2xl font-bold mb-4">IF</div>
+        <h1 class="text-2xl font-bold">InvoiceFlow</h1>
+        <p class="text-slate-500 mt-1">Professional invoices in under 60 seconds</p>
+      </div>
+
+      <!-- Signup FIRST (default) -->
+      <div id="signup-form" class="card p-6 space-y-4">
+        <h2 class="text-lg font-semibold">Create account</h2>
+        <form id="signup-form-el" autocomplete="off" onsubmit="return false;">
+          <div class="mb-4">
+            <label class="form-label" for="signup-name">Full name</label>
+            <input id="signup-name" name="full_name" type="text" class="form-input auth-field" placeholder="Enter your full name" autocomplete="off" data-lpignore="true" data-form-type="other" value="">
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="signup-email">Email</label>
+            <input id="signup-email" name="signup_email" type="email" class="form-input auth-field" placeholder="Enter your email" autocomplete="off" data-lpignore="true" data-form-type="other" required value="">
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="signup-password">Password</label>
+            <input id="signup-password" name="signup_password" type="password" class="form-input auth-field" placeholder="Min 6 characters" autocomplete="new-password" data-lpignore="true" data-form-type="other" required value="">
+          </div>
+          <p class="text-xs text-slate-500 mb-3">
+            By creating an account you agree to our
+            <button type="button" class="text-blue-600 hover:underline" data-legal="terms">Terms</button>,
+            <button type="button" class="text-blue-600 hover:underline" data-legal="privacy">Privacy Policy</button>
+            and
+            <button type="button" class="text-blue-600 hover:underline" data-legal="refund">Refund Policy</button>.
+          </p>
+          <button type="button" id="btn-signup" class="btn btn-primary w-full">Create account</button>
+        </form>
+        <p class="text-sm text-center text-slate-500">
+          Already have an account? <button type="button" id="show-login" class="text-blue-600 font-medium hover:underline">Sign in</button>
+        </p>
+        <p id="signup-error" class="text-sm text-red-600 hidden"></p>
+        <p class="text-xs text-slate-400 text-center">7-day free trial · No credit card required</p>
+      </div>
+
+      <!-- Login (hidden by default) -->
+      <div id="login-form" class="card p-6 space-y-4 hidden">
+        <h2 class="text-lg font-semibold">Sign in</h2>
+        <form id="login-form-el" autocomplete="off" onsubmit="return false;">
+          <div class="mb-4">
+            <label class="form-label" for="login-email">Email</label>
+            <input id="login-email" name="login_email" type="email" class="form-input auth-field" placeholder="Enter your email" autocomplete="off" data-lpignore="true" data-form-type="other" required value="">
+          </div>
+          <div class="mb-4">
+            <label class="form-label" for="login-password">Password</label>
+            <input id="login-password" name="login_password" type="password" class="form-input auth-field" placeholder="Enter your password" autocomplete="new-password" data-lpignore="true" data-form-type="other" required value="">
+          </div>
+          <button type="button" id="btn-login" class="btn btn-primary w-full">Sign in</button>
+        </form>
+        <p class="text-sm text-center text-slate-500">
+          No account? <button type="button" id="show-signup" class="text-blue-600 font-medium hover:underline">Create one</button>
+        </p>
+        <p id="login-error" class="text-sm text-red-600 hidden"></p>
+      </div>
+
+      <!-- Legal links under auth -->
+      <div class="mt-6 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-slate-400">
+        <button type="button" class="hover:text-slate-600 dark:hover:text-slate-300" data-legal="terms">Terms of Service</button>
+        <button type="button" class="hover:text-slate-600 dark:hover:text-slate-300" data-legal="privacy">Privacy Policy</button>
+        <button type="button" class="hover:text-slate-600 dark:hover:text-slate-300" data-legal="refund">Refund Policy</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- APP SHELL (hidden until logged in) -->
+  <div id="app-shell" class="hidden min-h-screen flex">
+    <aside id="sidebar" class="fixed inset-y-0 left-0 z-40 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform -translate-x-full lg:translate-x-0 transition-transform">
+      <div class="flex flex-col h-full">
+        <div class="flex items-center gap-3 px-5 py-5 border-b border-slate-200 dark:border-slate-800">
+          <div class="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold">IF</div>
+          <div>
+            <div class="font-semibold">InvoiceFlow</div>
+            <div class="text-xs text-slate-500" id="plan-badge">Free Trial</div>
+          </div>
+        </div>
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+          <button data-view="dashboard" class="nav-item active w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Dashboard</button>
+          <button data-view="invoices" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Invoices</button>
+          <button data-view="customers" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Customers</button>
+          <button data-view="products" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Products</button>
+          <button data-view="payments" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Payments</button>
+          <button data-view="reports" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Reports</button>
+          <button data-view="billing" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Pricing</button>
+          <button data-view="settings" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium">Settings</button>
+        </nav>
+        <div class="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+          <button id="themeToggle" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800">Toggle theme</button>
+          <button id="btn-logout" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">Sign out</button>
+        </div>
+      </div>
+    </aside>
+
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden"></div>
+
+    <div class="flex-1 flex flex-col lg:pl-64">
+      <header class="sticky top-0 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur border-b border-slate-200 dark:border-slate-800 px-4 sm:px-6 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <button id="menuBtn" class="lg:hidden p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800">☰</button>
+          <h1 id="pageTitle" class="text-lg font-semibold">Dashboard</h1>
+        </div>
+        <div class="flex items-center gap-3">
+          <button id="createInvoiceBtn" class="btn btn-primary btn-sm hidden sm:inline-flex">+ Create Invoice</button>
+          <div id="userAvatar" class="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 flex items-center justify-center text-sm font-semibold">U</div>
+        </div>
+      </header>
+
+      <main class="flex-1 p-4 sm:p-6 overflow-auto">
+        <div id="view-dashboard" class="view"></div>
+        <div id="view-invoices" class="view hidden"></div>
+        <div id="view-customers" class="view hidden"></div>
+        <div id="view-products" class="view hidden"></div>
+        <div id="view-payments" class="view hidden"></div>
+        <div id="view-reports" class="view hidden"></div>
+        <div id="view-billing" class="view hidden"></div>
+        <div id="view-settings" class="view hidden"></div>
+        <div id="view-invoice-builder" class="view hidden"></div>
+        <div id="view-invoice-detail" class="view hidden"></div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
+  <div id="modalRoot"></div>
+
+  <!-- Absolute paths from site root so Vercel serves them correctly -->
+  <script src="/js/config.js"></script>
+  <script src="/js/supabase.js"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/pdf.js"></script>
+  <script src="/js/app.js"></script>
+  <script>
+    window.addEventListener('error', function (e) {
+      if (e.filename && e.filename.indexOf('/js/') !== -1) {
+        var el = document.getElementById('js-error-banner');
+        if (!el) {
+          el = document.createElement('div');
+          el.id = 'js-error-banner';
+          el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b91c1c;color:#fff;padding:12px 16px;text-align:center;font:14px system-ui,sans-serif';
+          el.innerHTML = 'App scripts failed to load (404). On Vercel: Framework Preset = <b>Other</b>, Build Command = empty, Output Directory = empty. Then redeploy.';
+          document.body.prepend(el);
+        }
+      }
+    }, true);
+  </script>
+</body>
+</html>
