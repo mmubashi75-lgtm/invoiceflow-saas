@@ -95,6 +95,7 @@
       if (login) login.classList.remove('hidden');
     }
     if (typeof clearAuthFields === 'function') clearAuthFields();
+    showConfigBanner(isSignup ? 'signup-error' : 'login-error');
   }
 
   function showAuth() {
@@ -164,6 +165,16 @@
     document.getElementById('plan-badge').textContent = text;
   }
 
+
+  function showConfigBanner(targetErrId) {
+    if (IF.client) return;
+    var el = document.getElementById(targetErrId);
+    if (!el) return;
+    el.className = 'text-sm text-red-600';
+    el.innerHTML = 'Supabase is not connected. <strong>.env.local is NOT read by the browser.</strong><br>1) Copy <code>js/config.local.example.js</code> → <code>js/config.local.js</code><br>2) Paste your real SUPABASE_URL and SUPABASE_ANON_KEY<br>3) Hard refresh (Ctrl+Shift+R)';
+    el.classList.remove('hidden');
+  }
+
   // ─── Auth forms ────────────────────────────────────────────────────────
   function clearAuthFields() {
     ['login-email', 'login-password', 'signup-name', 'signup-email', 'signup-password'].forEach(id => {
@@ -183,6 +194,8 @@
 
   function bindAuthForms() {
     clearAuthFields();
+    showConfigBanner('signup-error');
+    showConfigBanner('login-error');
 
     document.getElementById('show-signup').onclick = () => {
       clearAuthFields();

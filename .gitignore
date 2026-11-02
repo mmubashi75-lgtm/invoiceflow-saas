@@ -6,3 +6,8 @@ dist/
 .DS_Store
 *.log
 .vite/
+
+js/config.local.js
+.env
+.env.local
+.env*.local

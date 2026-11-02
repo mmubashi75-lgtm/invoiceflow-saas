@@ -9,8 +9,15 @@ let currentUser = null;
 let currentProfile = null;
 
 function initSupabase() {
-  if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.includes('YOUR_PROJECT')) {
-    console.warn('Supabase not configured. Running in demo mode.');
+  if (typeof CONFIG === 'undefined' || !CONFIG) {
+    console.error('CONFIG is not defined — ensure js/config.js loads before supabase.js');
+    return null;
+  }
+  var ok = typeof isSupabaseConfigured === 'function'
+    ? isSupabaseConfigured()
+    : (CONFIG.SUPABASE_URL && String(CONFIG.SUPABASE_URL).indexOf('YOUR_PROJECT') === -1);
+  if (!ok) {
+    console.warn('Supabase not configured. Create js/config.local.js with your keys (see config.local.example.js)');
     return null;
   }
   sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
