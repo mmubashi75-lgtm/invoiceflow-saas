@@ -149,6 +149,7 @@
     };
 
     navigate('dashboard');
+    try { updateNavLocks(); } catch (_) {}
     } catch (e) {
       console.error('showApp failed', e);
       IFUtils.toast('Could not open app: ' + (e.message || e), 'error');
@@ -407,6 +408,16 @@
 
   // ─── Navigation ────────────────────────────────────────────────────────
   function navigate(view, opts = {}) {
+    // Plan gates for routes
+    if (view === 'payments' && !canUse('paymentTracking')) {
+      showUpgradeModal('Payment tracking is available on Starter and higher. Upgrade to record and view payments.');
+      view = 'billing';
+    }
+    if (view === 'reports' && !canUse('basicReports')) {
+      showUpgradeModal('Reports are available on Pro and Business plans.');
+      view = 'billing';
+    }
+
     currentView = view;
     document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
     const el = document.getElementById('view-' + view);
@@ -415,6 +426,7 @@
     document.querySelectorAll('.nav-item').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.view === view);
     });
+    updateNavLocks();
 
     const titles = {
       dashboard: 'Dashboard', invoices: 'Invoices', customers: 'Customers',
@@ -423,7 +435,8 @@
       'invoice-builder': editingInvoiceId ? 'Edit Invoice' : 'Create Invoice',
       'invoice-detail': 'Invoice'
     };
-    document.getElementById('pageTitle').textContent = titles[view] || 'InvoiceFlow';
+    const pt = document.getElementById('pageTitle');
+    if (pt) pt.textContent = titles[view] || 'InvoiceFlow';
 
     document.getElementById('sidebar').classList.add('-translate-x-full');
     document.getElementById('sidebarOverlay').classList.add('hidden');
@@ -704,6 +717,14 @@
 
   // ─── Payments ──────────────────────────────────────────────────────────
   function renderPayments() {
+    if (!canUse('paymentTracking')) {
+      document.getElementById('view-payments').innerHTML = lockedFeatureCard(
+        'Payment tracking',
+        'Record partial and full payments, methods, and references.',
+        'Starter'
+      );
+      return;
+    }
     const all = [];
     invoices.forEach(inv => {
       (inv.payments || []).forEach(p => all.push({ ...p, invoice_number: inv.number, customer_id: inv.customer_id }));
@@ -729,6 +750,14 @@
 
   // ─── Reports ───────────────────────────────────────────────────────────
   function renderReports() {
+    if (!canUse('basicReports')) {
+      document.getElementById('view-reports').innerHTML = lockedFeatureCard(
+        'Reports',
+        'Revenue, outstanding, monthly income charts and status breakdown.',
+        'Pro'
+      );
+      return;
+    }
     const list = invoices.map(inv => {
       const status = IF.deriveStatus(inv);
       const totals = IF.calcTotals(inv);
@@ -878,6 +907,31 @@
     return PLANS[getCurrentPlanId()] || PLANS.free;
   }
 
+  /** Feature flag from current plan (trial = Pro features) */
+  function canUse(feature) {
+    const plan = getCurrentPlan();
+    const f = plan.features || {};
+    if (feature === 'templates') return true; // count handled separately
+    if (feature === 'basicReports') return !!f.reports || !!f.advancedReports;
+    if (feature === 'advancedReports') return !!f.advancedReports;
+    return !!f[feature];
+  }
+
+  function requireFeature(feature, message) {
+    if (canUse(feature)) return true;
+    showUpgradeModal(message || ('This feature is not available on the ' + getCurrentPlan().name + ' plan. Upgrade to unlock it.'));
+    return false;
+  }
+
+  /** Allowed PDF template ids for current plan */
+  function allowedTemplates() {
+    const plan = getCurrentPlan();
+    const all = ['modern', 'classic', 'minimal', 'bold', 'elegant'];
+    const n = plan.templates;
+    if (n === -1 || n == null) return all;
+    return all.slice(0, Math.max(1, n));
+  }
+
   function checkLimit(type) {
     const plan = getCurrentPlan();
     const limits = {
@@ -892,7 +946,6 @@
     if (type === 'customers') current = customers.length;
     else if (type === 'products') current = products.length;
     else if (type === 'invoices') {
-      // Count invoices created this calendar month
       const now = new Date();
       const ym = now.toISOString().slice(0, 7);
       current = invoices.filter(i => (i.created_at || i.issue_date || '').startsWith(ym)).length;
@@ -910,6 +963,28 @@
           <button class="btn btn-ghost w-full mt-2" onclick="document.getElementById('modalRoot').innerHTML=''">Maybe later</button>
         </div>
       </div>`;
+  }
+
+  function lockedFeatureCard(title, blurb, minPlan) {
+    return `
+      <div class="card p-8 text-center max-w-lg mx-auto">
+        <div class="text-4xl mb-3">🔒</div>
+        <h3 class="text-lg font-semibold mb-2">${title}</h3>
+        <p class="text-sm text-slate-500 mb-6">${blurb}</p>
+        <p class="text-xs text-slate-400 mb-4">Available on <strong>${minPlan}</strong> and higher</p>
+        <button class="btn btn-primary" onclick="App.navigate('billing')">View plans</button>
+      </div>`;
+  }
+
+  function updateNavLocks() {
+    document.querySelectorAll('.nav-item').forEach(btn => {
+      const view = btn.dataset.view;
+      let locked = false;
+      if (view === 'payments' && !canUse('paymentTracking')) locked = true;
+      if (view === 'reports' && !canUse('basicReports')) locked = true;
+      btn.classList.toggle('opacity-50', locked);
+      btn.title = locked ? 'Upgrade to unlock' : '';
+    });
   }
 
   // ─── Billing (Paddle) ──────────────────────────────────────────────────
@@ -1073,13 +1148,37 @@
         <div class="grid grid-cols-2 gap-3">
           <input name="currency_symbol" class="form-input" placeholder="Currency $" value="${IFUtils.escapeHtml(p.currency_symbol||'$')}">
           <input name="invoice_prefix" class="form-input" placeholder="Prefix INV-" value="${IFUtils.escapeHtml(p.invoice_prefix||'INV-')}">
-          <input name="brand_color" type="color" class="form-input h-10" value="${p.brand_color||'#2563eb'}">
-          <select name="template" class="form-select">
-            <option value="modern" ${p.template==='modern'?'selected':''}>Modern</option>
-            <option value="classic" ${p.template==='classic'?'selected':''}>Classic</option>
-            <option value="minimal" ${p.template==='minimal'?'selected':''}>Minimal</option>
-          </select>
+          ${canUse('customBranding') || canUse('customLogo') ? `
+          <div>
+            <label class="form-label text-xs">Brand color ${canUse('customBranding') ? '' : '(Pro+)'}</label>
+            <input name="brand_color" type="color" class="form-input h-10" value="${p.brand_color||'#2563eb'}" ${canUse('customBranding') ? '' : 'disabled'}>
+          </div>
+          <div>
+            <label class="form-label text-xs">Logo URL ${canUse('customLogo') ? '' : '(Starter+)'}</label>
+            <input name="logo_url" class="form-input" placeholder="https://..." value="${IFUtils.escapeHtml(p.logo_url||'')}" ${canUse('customLogo') ? '' : 'disabled'}>
+          </div>` : `
+          <div class="col-span-2 text-xs text-slate-500 p-3 rounded-lg bg-slate-50 dark:bg-slate-900">
+            Custom logo & brand colors unlock on <button type="button" class="text-blue-600 underline" onclick="App.navigate('billing')">Starter / Pro</button>
+          </div>`}
+          <div class="col-span-2">
+            <label class="form-label text-xs">Default PDF template</label>
+            <select name="template" class="form-select">
+              ${allowedTemplates().map(id => {
+                const labels = { modern:'Modern', classic:'Classic', minimal:'Minimal', bold:'Bold', elegant:'Elegant' };
+                return '<option value="'+id+'" '+(p.template===id?'selected':'')+'>'+(labels[id]||id)+'</option>';
+              }).join('')}
+            </select>
+            <p class="text-xs text-slate-400 mt-1">${getCurrentPlan().templates === -1 ? 'Unlimited templates' : (getCurrentPlan().templates + ' template(s) on ' + getCurrentPlan().name)}</p>
+          </div>
         </div>
+        ${canUse('api') ? `
+        <div class="p-3 rounded-lg border border-slate-200 dark:border-slate-700 text-sm">
+          <div class="font-medium mb-1">API access</div>
+          <p class="text-slate-500 text-xs">Business plan includes API access. Contact support to request your key.</p>
+        </div>` : `
+        <div class="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs text-slate-500">
+          API access is on the <button type="button" class="text-blue-600 underline" onclick="App.navigate('billing')">Business</button> plan.
+        </div>`}
         <button type="submit" class="btn btn-primary">Save Settings</button>
       </form>
       <div class="max-w-xl mt-6 card p-5">
@@ -1094,6 +1193,12 @@
       e.preventDefault();
       const fd = new FormData(e.target);
       const updates = Object.fromEntries(fd);
+      if (!canUse('customBranding')) delete updates.brand_color;
+      if (!canUse('customLogo')) delete updates.logo_url;
+      const allowed = allowedTemplates();
+      if (updates.template && allowed.indexOf(updates.template) === -1) {
+        updates.template = allowed[0] || 'modern';
+      }
       try {
         await IF.updateProfile(updates);
         IFUtils.toast('Settings saved');
@@ -1168,12 +1273,14 @@
           <div class="sm:col-span-2">
             <label class="form-label">PDF Template</label>
             <select id="ib-template" class="form-select">
-              ${['modern','classic','minimal','bold','elegant'].map(id => {
+              ${allowedTemplates().map(id => {
                 const labels = { modern:'Modern', classic:'Classic', minimal:'Minimal', bold:'Bold', elegant:'Elegant' };
-                const sel = (inv?.template || profile.default_template || 'modern') === id ? 'selected' : '';
+                const current = inv?.template || profile.template || 'modern';
+                const sel = current === id ? 'selected' : '';
                 return '<option value="'+id+'" '+sel+'>'+labels[id]+'</option>';
               }).join('')}
             </select>
+            <p class="text-xs text-slate-400 mt-1">${getCurrentPlan().name}: ${getCurrentPlan().templates === -1 ? 'all templates' : getCurrentPlan().templates + ' template(s)'}</p>
           </div>
         </div>
 
@@ -1410,7 +1517,11 @@
       shipping: parseFloat(document.getElementById('ib-shipping').value) || 0,
       notes: document.getElementById('ib-notes')?.value || '',
       terms: document.getElementById('ib-terms')?.value || '',
-      template: document.getElementById('ib-template')?.value || 'modern'
+      template: (function () {
+        var t = document.getElementById('ib-template')?.value || 'modern';
+        var ok = allowedTemplates();
+        return ok.indexOf(t) >= 0 ? t : (ok[0] || 'modern');
+      })()
     };
 
     if (!payload.customer_id) {
@@ -1485,6 +1596,7 @@
           <div class="flex flex-wrap gap-2">
             <button class="btn btn-secondary btn-sm" onclick="App.editInvoice('${inv.id}')">Edit</button>
             <button class="btn btn-primary btn-sm" onclick="App.downloadPdf('${inv.id}')">⬇ Download PDF</button>
+            ${canUse('whatsapp') && cust.phone ? `<button class="btn btn-secondary btn-sm" onclick="App.shareWhatsApp('${inv.id}')">WhatsApp</button>` : (canUse('whatsapp') ? '' : `<button class="btn btn-ghost btn-sm opacity-60" onclick="App.requireFeature('whatsapp','WhatsApp sharing is on Pro and Business plans.')">WhatsApp 🔒</button>`)}
           </div>
         </div>
 
@@ -1565,7 +1677,27 @@
       </div>`;
   }
 
+  function shareWhatsApp(id) {
+    if (!requireFeature('whatsapp', 'WhatsApp sharing is available on Pro and Business plans.')) return;
+    const inv = invoices.find(i => i.id === id);
+    if (!inv) return;
+    const cust = customers.find(c => c.id === inv.customer_id) || {};
+    const totals = IF.calcTotals(inv);
+    const sym = IF.currentProfile?.currency_symbol || '$';
+    const text = encodeURIComponent(
+      'Invoice ' + inv.number + '\nTotal: ' + sym + Number(totals.total).toFixed(2) +
+      '\nDue: ' + (inv.due_date || '') +
+      (cust.name ? '\nFor: ' + cust.name : '')
+    );
+    let phone = (cust.phone || '').replace(/[^0-9]/g, '');
+    const url = phone
+      ? 'https://wa.me/' + phone + '?text=' + text
+      : 'https://wa.me/?text=' + text;
+    window.open(url, '_blank');
+  }
+
   async function downloadPdf(id) {
+    if (!requireFeature('pdf', 'PDF export is not available on your plan.')) return;
     const inv = invoices.find(i => i.id === id);
     if (!inv) return;
     const customer = customers.find(c => c.id === inv.customer_id) || {};
@@ -1619,7 +1751,7 @@
   window.App = {
     navigate, createInvoice, editInvoice, viewInvoice, saveInvoice,
     openCustomerModal, deleteCustomer, openProductModal, deleteProduct,
-    downloadPdf, checkout, showLegal, filterInvoices: () => {},
+    downloadPdf, shareWhatsApp, requireFeature, canUse, checkout, showLegal, filterInvoices: () => {},
     renderLineItems, updateLineItem, addLineItem, removeLineItem, updateBuilderTotals,
     showSignup, showLanding
   };
