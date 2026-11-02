@@ -47,14 +47,60 @@ async function signOut() {
 
 async function loadProfile() {
   if (!sb || !currentUser) return null;
+
   const { data, error } = await sb
     .from('profiles')
     .select('*')
     .eq('id', currentUser.id)
-    .single();
-  if (error) throw error;
-  currentProfile = data;
-  // Downgrade expired trial / canceled / past_due subscriptions to Free
+    .maybeSingle();
+
+  if (error) {
+    console.error('loadProfile select error', error);
+    // Don't block login on profile errors — use a minimal local profile
+    currentProfile = {
+      id: currentUser.id,
+      email: currentUser.email,
+      full_name: currentUser.user_metadata?.full_name || '',
+      company_name: 'My Company',
+      currency_symbol: '$',
+      invoice_prefix: 'INV-',
+      next_invoice_number: 1001,
+      subscription_status: 'trialing',
+      subscription_plan: 'free',
+      trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString()
+    };
+    return currentProfile;
+  }
+
+  if (!data) {
+    // Profile trigger may have failed — create profile from client
+    const insert = {
+      id: currentUser.id,
+      email: currentUser.email,
+      full_name: currentUser.user_metadata?.full_name || (currentUser.email || '').split('@')[0],
+      company_name: 'My Company',
+      currency_symbol: '$',
+      invoice_prefix: 'INV-',
+      next_invoice_number: 1001,
+      subscription_status: 'trialing',
+      subscription_plan: 'free',
+      trial_ends_at: new Date(Date.now() + 14 * 86400000).toISOString()
+    };
+    const { data: created, error: insErr } = await sb
+      .from('profiles')
+      .upsert(insert, { onConflict: 'id' })
+      .select()
+      .maybeSingle();
+    if (insErr) {
+      console.error('profile upsert error', insErr);
+      currentProfile = insert;
+    } else {
+      currentProfile = created || insert;
+    }
+  } else {
+    currentProfile = data;
+  }
+
   await enforceSubscriptionStatus();
   return currentProfile;
 }

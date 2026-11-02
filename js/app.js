@@ -25,23 +25,42 @@
       return;
     }
 
-    // Auth state listener
+    // Auth state listener — only react to real sign-in / sign-out
     IF.client.auth.onAuthStateChange(async (event, session) => {
+      console.log('[auth]', event, !!session);
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        if (session?.user) {
+          IF.currentUser = session.user;
+          try {
+            await IF.loadProfile();
+          } catch (e) {
+            console.error(e);
+          }
+          await showApp();
+        }
+      } else if (event === 'SIGNED_OUT') {
+        IF.currentUser = null;
+        IF.currentProfile = null;
+        showLanding();
+      }
+      // Ignore INITIAL_SESSION here — handled below to avoid race
+    });
+
+    try {
+      const session = await IF.getSession();
       if (session?.user) {
         IF.currentUser = session.user;
-        await IF.loadProfile();
-        showApp();
+        try {
+          await IF.loadProfile();
+        } catch (e) {
+          console.error(e);
+        }
+        await showApp();
       } else {
         showAuth();
       }
-    });
-
-    const session = await IF.getSession();
-    if (session?.user) {
-      IF.currentUser = session.user;
-      await IF.loadProfile();
-      showApp();
-    } else {
+    } catch (e) {
+      console.error('session check failed', e);
       showAuth();
     }
 
@@ -91,14 +110,18 @@
   }
 
   async function showApp() {
+    try {
     const land = document.getElementById('landing-screen');
     if (land) land.classList.add('hidden');
-    document.getElementById('auth-screen').classList.add('hidden');
-    document.getElementById('app-shell').classList.remove('hidden');
+    const authEl = document.getElementById('auth-screen');
+    const shell = document.getElementById('app-shell');
+    if (authEl) authEl.classList.add('hidden');
+    if (shell) shell.classList.remove('hidden');
 
-    const profile = IF.currentProfile;
-    document.getElementById('userAvatar').textContent = (profile?.full_name || profile?.email || 'U')[0].toUpperCase();
-    updatePlanBadge();
+    const profile = IF.currentProfile || {};
+    const avatar = document.getElementById('userAvatar');
+    if (avatar) avatar.textContent = (profile.full_name || profile.email || 'U')[0].toUpperCase();
+    try { updatePlanBadge(); } catch (e) { console.warn(e); }
 
     // Load data
     try {
@@ -116,13 +139,19 @@
     document.querySelectorAll('.nav-item').forEach(btn => {
       btn.onclick = () => navigate(btn.dataset.view);
     });
-    document.getElementById('createInvoiceBtn').onclick = () => createInvoice();
-    document.getElementById('btn-logout').onclick = async () => {
+    const createBtn = document.getElementById('createInvoiceBtn');
+    if (createBtn) createBtn.onclick = () => createInvoice();
+    const logoutBtn = document.getElementById('btn-logout');
+    if (logoutBtn) logoutBtn.onclick = async () => {
       await IF.signOut();
-      showAuth();
+      showLanding();
     };
 
     navigate('dashboard');
+    } catch (e) {
+      console.error('showApp failed', e);
+      IFUtils.toast('Could not open app: ' + (e.message || e), 'error');
+    }
   }
 
   function updatePlanBadge() {
@@ -189,7 +218,16 @@
       btn.disabled = true;
       btn.textContent = 'Signing in…';
       try {
-        await IF.signIn(email, password);
+        const data = await IF.signIn(email, password);
+        const user = data?.user || data?.session?.user;
+        if (user) {
+          IF.currentUser = user;
+          try { await IF.loadProfile(); } catch (e) { console.error(e); }
+          await showApp();
+        } else {
+          errEl.textContent = 'Sign in succeeded but no session. Disable email confirmation in Supabase Auth settings, or confirm your email.';
+          errEl.classList.remove('hidden');
+        }
       } catch (e) {
         errEl.textContent = e.message || 'Sign in failed';
         errEl.classList.remove('hidden');
@@ -225,19 +263,34 @@
       btn.textContent = 'Creating…';
       try {
         const data = await IF.signUp(email, password, name);
-        const needsConfirm = data?.user && !data?.session;
-        if (needsConfirm) {
-          IFUtils.toast('Account created! Confirm your email, then sign in.');
-          errEl.classList.remove('hidden');
-          errEl.className = 'text-sm text-emerald-600';
-          errEl.textContent = 'Check your inbox to confirm email, then Sign in.';
-          clearAuthFields();
-          document.getElementById('signup-form').classList.add('hidden');
-          document.getElementById('login-form').classList.remove('hidden');
-        } else {
+        // If Supabase returns a session → go straight to dashboard
+        if (data?.session?.user || data?.user?.id && data?.session) {
+          IF.currentUser = data.session.user;
+          try { await IF.loadProfile(); } catch (e) { console.error(e); }
           IFUtils.toast('Welcome! Account created.');
-          // onAuthStateChange will show the app
+          await showApp();
+          return;
         }
+        // Email confirmation required — try immediate sign-in (works if confirm is off)
+        try {
+          const loginData = await IF.signIn(email, password);
+          if (loginData?.user || loginData?.session?.user) {
+            IF.currentUser = loginData.user || loginData.session.user;
+            try { await IF.loadProfile(); } catch (e) { console.error(e); }
+            IFUtils.toast('Welcome! Account created.');
+            await showApp();
+            return;
+          }
+        } catch (signInErr) {
+          console.warn('post-signup sign-in', signInErr);
+        }
+        // Still no session → tell user to confirm email OR disable confirmation
+        errEl.className = 'text-sm text-amber-600';
+        errEl.textContent = 'Account created. If you did not enter the app: Supabase → Authentication → Providers → Email → turn OFF "Confirm email", then Sign in.';
+        errEl.classList.remove('hidden');
+        document.getElementById('signup-form').classList.add('hidden');
+        document.getElementById('login-form').classList.remove('hidden');
+        document.getElementById('login-email').value = email;
       } catch (e) {
         errEl.className = 'text-sm text-red-600';
         errEl.textContent = e.message || 'Sign up failed';
