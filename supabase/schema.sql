@@ -76,6 +76,7 @@ create table public.invoices (
   shipping numeric(12,2) default 0,
   notes text,
   terms text,
+  template text default 'modern',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );

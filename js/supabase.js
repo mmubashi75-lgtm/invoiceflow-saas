@@ -312,28 +312,61 @@ async function getInvoice(id) {
   return data;
 }
 
-async function createInvoice(payload) {
-  const { data, error } = await sb.from('invoices').insert({
-    ...payload,
-    user_id: currentUser.id
-  }).select().single();
-  if (error) throw error;
+function sanitizeInvoicePayload(payload) {
+  // Only send columns that exist on public.invoices
+  const allowed = [
+    'customer_id', 'number', 'issue_date', 'due_date', 'status',
+    'items', 'discount', 'discount_type', 'tax_rate', 'shipping',
+    'notes', 'terms', 'template'
+  ];
+  const out = {};
+  allowed.forEach(function (k) {
+    if (payload[k] !== undefined) out[k] = payload[k];
+  });
+  return out;
+}
 
-  // Increment next number
+async function createInvoice(payload) {
+  var body = Object.assign({}, sanitizeInvoicePayload(payload), { user_id: currentUser.id });
+  var result = await sb.from('invoices').insert(body).select().single();
+
+  // If DB has no template column yet, retry without it
+  if (result.error && /template/i.test(result.error.message || '')) {
+    delete body.template;
+    result = await sb.from('invoices').insert(body).select().single();
+  }
+  if (result.error) throw result.error;
+
   if (currentProfile) {
     await updateProfile({ next_invoice_number: (currentProfile.next_invoice_number || 1001) + 1 });
   }
+  // Keep template on returned object for PDF even if column missing
+  var data = result.data || {};
+  if (payload.template && !data.template) data.template = payload.template;
   return data;
 }
 
 async function updateInvoice(id, payload) {
-  const { data, error } = await sb
+  var body = Object.assign({}, sanitizeInvoicePayload(payload), { updated_at: new Date().toISOString() });
+  var result = await sb
     .from('invoices')
-    .update({ ...payload, updated_at: new Date().toISOString() })
+    .update(body)
     .eq('id', id)
     .select()
     .single();
-  if (error) throw error;
+
+  if (result.error && /template/i.test(result.error.message || '')) {
+    delete body.template;
+    result = await sb
+      .from('invoices')
+      .update(body)
+      .eq('id', id)
+      .select()
+      .single();
+  }
+  if (result.error) throw result.error;
+  var data = result.data || {};
+  if (payload.template && !data.template) data.template = payload.template;
   return data;
 }
 
