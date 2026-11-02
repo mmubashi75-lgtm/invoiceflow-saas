@@ -2,33 +2,18 @@
  * InvoiceFlow — Supabase client + data layer
  */
 
+const { createClient } = supabase;
+
 let sb = null;
 let currentUser = null;
 let currentProfile = null;
 
 function initSupabase() {
-  // Guard: CDN may fail or be blocked — never throw at top level
-  const createClient =
-    (typeof supabase !== 'undefined' && supabase.createClient) ||
-    (typeof window !== 'undefined' && window.supabase && window.supabase.createClient);
-
-  if (!createClient) {
-    console.error('Supabase SDK not loaded. Check CDN script or network.');
+  if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.includes('YOUR_PROJECT')) {
+    console.warn('Supabase not configured. Running in demo mode.');
     return null;
   }
-
-  if (!CONFIG.SUPABASE_URL || CONFIG.SUPABASE_URL.includes('YOUR_PROJECT') ||
-      !CONFIG.SUPABASE_ANON_KEY || CONFIG.SUPABASE_ANON_KEY.includes('YOUR_SUPABASE')) {
-    console.warn('Supabase not configured. Demo mode — buttons still work; auth shows an error.');
-    return null;
-  }
-
-  try {
-    sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-  } catch (e) {
-    console.error('Supabase init failed', e);
-    return null;
-  }
+  sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
   return sb;
 }
 

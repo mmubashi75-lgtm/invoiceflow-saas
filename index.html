@@ -14,15 +14,65 @@
     }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.paddle.com/paddle/v2/paddle.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@paddle/paddle-js@1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  <link rel="stylesheet" href="/css/styles.css">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
+
+  <!-- LANDING PAGE -->
+  <div id="landing-screen" class="min-h-screen bg-slate-50 dark:bg-slate-950">
+    <header class="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur sticky top-0 z-10">
+      <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center">IF</div>
+          <span class="font-semibold text-lg">InvoiceFlow</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="App.showSignup(false)">Sign in</button>
+          <button type="button" class="btn btn-primary btn-sm" onclick="App.showSignup(true)">Get started</button>
+        </div>
+      </div>
+    </header>
+    <main class="max-w-5xl mx-auto px-4 py-16 sm:py-24 text-center">
+      <p class="text-sm font-medium text-blue-600 mb-3">Invoicing for freelancers &amp; small businesses</p>
+      <h1 class="text-4xl sm:text-5xl font-bold tracking-tight mb-4">Create professional invoices<br class="hidden sm:block"> in under 60 seconds</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-8">
+        Track customers, products, payments and get paid faster. Free to start — upgrade when you grow.
+      </p>
+      <div class="flex flex-wrap gap-3 justify-center mb-16">
+        <button type="button" class="btn btn-primary px-6 py-3 text-base" onclick="App.showSignup(true)">Start free trial</button>
+        <button type="button" class="btn btn-secondary px-6 py-3 text-base" onclick="App.showSignup(false)">I already have an account</button>
+      </div>
+      <div class="grid sm:grid-cols-3 gap-6 text-left max-w-3xl mx-auto">
+        <div class="card p-5">
+          <div class="text-2xl mb-2">⚡</div>
+          <h3 class="font-semibold mb-1">Fast invoices</h3>
+          <p class="text-sm text-slate-500">Build and send invoices with line items, tax, discount and PDF export.</p>
+        </div>
+        <div class="card p-5">
+          <div class="text-2xl mb-2">👥</div>
+          <h3 class="font-semibold mb-1">Customers &amp; payments</h3>
+          <p class="text-sm text-slate-500">Manage clients, products and record partial or full payments.</p>
+        </div>
+        <div class="card p-5">
+          <div class="text-2xl mb-2">📊</div>
+          <h3 class="font-semibold mb-1">Reports</h3>
+          <p class="text-sm text-slate-500">See revenue, outstanding and overdue balances at a glance.</p>
+        </div>
+      </div>
+    </main>
+    <footer class="border-t border-slate-200 dark:border-slate-800 py-6 text-center text-xs text-slate-400">
+      <button type="button" class="hover:underline mx-2" data-legal="terms">Terms</button>
+      <button type="button" class="hover:underline mx-2" data-legal="privacy">Privacy</button>
+      <button type="button" class="hover:underline mx-2" data-legal="refund">Refunds</button>
+    </footer>
+  </div>
+
   <!-- AUTH SCREENS -->
-  <div id="auth-screen" class="min-h-screen flex items-center justify-center p-4">
+  <div id="auth-screen" class="hidden min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <div class="text-center mb-8">
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-blue-600 text-white text-2xl font-bold mb-4">IF</div>
@@ -151,25 +201,10 @@
   <div id="toasts" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
   <div id="modalRoot"></div>
 
-  <!-- Absolute paths from site root so Vercel serves them correctly -->
-  <script src="/js/config.js"></script>
-  <script src="/js/supabase.js"></script>
-  <script src="/js/utils.js"></script>
-  <script src="/js/pdf.js"></script>
-  <script src="/js/app.js"></script>
-  <script>
-    window.addEventListener('error', function (e) {
-      if (e.filename && e.filename.indexOf('/js/') !== -1) {
-        var el = document.getElementById('js-error-banner');
-        if (!el) {
-          el = document.createElement('div');
-          el.id = 'js-error-banner';
-          el.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b91c1c;color:#fff;padding:12px 16px;text-align:center;font:14px system-ui,sans-serif';
-          el.innerHTML = 'App scripts failed to load (404). On Vercel: Framework Preset = <b>Other</b>, Build Command = empty, Output Directory = empty. Then redeploy.';
-          document.body.prepend(el);
-        }
-      }
-    }, true);
-  </script>
+  <script src="js/config.js"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/pdf.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

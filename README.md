@@ -38,34 +38,17 @@ Open http://localhost:5173
 You can still open `index.html` or deploy the folder as static files.
 Put keys directly in `js/config.js` fallbacks if you skip `.env`.
 
-## Deploy to Vercel (so buttons work)
+## Deploy
 
-This is a **static** app. If Vercel uses the Vite preset, JS files 404 and **nothing is clickable**.
+```bash
+npm run build
+# Upload dist/ to Vercel, Netlify, Cloudflare Pages, etc.
+```
 
-### Correct Vercel settings
-
-1. Import the GitHub repo
-2. Before deploy set:
-   - **Framework Preset:** `Other` (not Vite)
-   - **Build Command:** leave **empty**
-   - **Output Directory:** leave **empty** (or `.`)
-   - **Install Command:** leave empty
-3. Put real Supabase + Paddle keys in `js/config.js` (fallback values), commit, push
-4. Deploy
-
-Check: open site → F12 → Network → refresh.  
-`/js/config.js` and `/js/app.js` must be **200**. If **404**, Framework/Output is still wrong — fix and redeploy.
-
-### Optional: Vite build + env vars
-
-Framework = Vite · Build = `npm run build` · Output = `dist`  
-Then add `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, etc. in Vercel env.
-
-### CLI
+Or:
 
 ```bash
 npx vercel
-# choose no framework / empty build when asked
 ```
 
 ## What you configure
