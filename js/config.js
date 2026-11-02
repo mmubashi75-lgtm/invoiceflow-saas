@@ -1,15 +1,6 @@
 /**
  * InvoiceFlow — Configuration (classic script — NO import.meta)
- *
- * Load order:
- * 1) window.__ENV__
- * 2) localStorage "invoiceflow_config" (JSON)
- * 3) defaults below
- * 4) js/config.local.js overrides CONFIG after this file loads
- *
- * Put real keys in js/config.local.js (copy from config.local.example.js).
- * .env.local only works with `npm run dev` if you use a Vite plugin — for
- * plain open / static host, use config.local.js.
+ * Put real keys here OR in js/config.local.js (loaded after this file).
  */
 (function () {
   'use strict';
@@ -33,30 +24,47 @@
     return fallback;
   }
 
+  function looksLikePlaceholder(val) {
+    if (!val) return true;
+    var s = String(val);
+    return s.indexOf('YOUR_') !== -1 || s.indexOf('xxxxx') !== -1 || s.indexOf('pri_starter') !== -1;
+  }
+
   var CONFIG = {
-    SUPABASE_URL: env('VITE_SUPABASE_URL', 'https://YOUR_PROJECT_REF.supabase.co'),
-    SUPABASE_ANON_KEY: env('VITE_SUPABASE_ANON_KEY', 'YOUR_SUPABASE_ANON_KEY'),
+    SUPABASE_URL: env('VITE_SUPABASE_URL', 'https://ijkenjbnddcphojwsmhz.supabase.co'),
+    SUPABASE_ANON_KEY: env('VITE_SUPABASE_ANON_KEY', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imlqa2VuamJuZGRjcGhvandzbWh6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0NjI4NjEsImV4cCI6MjEwNzAzODg2MX0.ABeWwkp-u-Y2Fl_xz0IbmQ0Al4kbX10Sxmjyu9vIGwQ'),
 
-    PADDLE_CLIENT_TOKEN: env('VITE_PADDLE_CLIENT_TOKEN', 'YOUR_PADDLE_CLIENT_TOKEN'),
-    PADDLE_ENVIRONMENT: env('VITE_PADDLE_ENVIRONMENT', 'sandbox'),
+    PADDLE_CLIENT_TOKEN: env('VITE_PADDLE_CLIENT_TOKEN', 'live_e9bb7ce58e3ef32a6dca1daee0c'),
+    PADDLE_ENVIRONMENT: env('VITE_PADDLE_ENVIRONMENT', 'production'),
 
-    PADDLE_PRICE_STARTER: env('VITE_PADDLE_PRICE_STARTER', 'pri_starter_xxxxx'),
-    PADDLE_PRICE_PRO: env('VITE_PADDLE_PRICE_PRO', 'pri_pro_xxxxx'),
-    PADDLE_PRICE_BUSINESS: env('VITE_PADDLE_PRICE_BUSINESS', 'pri_business_xxxxx'),
+    PADDLE_PRICE_STARTER: env('VITE_PADDLE_PRICE_STARTER', 'pri_01m4st76n4ysbw3g0gk413pen4'),
+    PADDLE_PRICE_PRO: env('VITE_PADDLE_PRICE_PRO', 'pri_01m4st9345f1msam36b1eb5j0f'),
+    PADDLE_PRICE_BUSINESS: env('VITE_PADDLE_PRICE_BUSINESS', 'pri_01m4sta23h3v7c1jmmsbm60r2h'),
 
     APP_NAME: env('VITE_APP_NAME', 'InvoiceFlow'),
     TRIAL_DAYS: 14,
-    SUPPORT_EMAIL: env('VITE_SUPPORT_EMAIL', 'support@yourdomain.com'),
+    SUPPORT_EMAIL: env('VITE_SUPPORT_EMAIL', 'mmubashi75@gmail.com'),
     RESEND_API_KEY: env('VITE_RESEND_API_KEY', ''),
     RESEND_FROM: env('VITE_RESEND_FROM', 'InvoiceFlow <onboarding@resend.dev>')
   };
+
+  /** Safe merge: never let placeholders overwrite real keys */
+  function mergeConfig(overrides) {
+    if (!overrides) return;
+    Object.keys(overrides).forEach(function (k) {
+      var v = overrides[k];
+      if (v == null || v === '') return;
+      if (looksLikePlaceholder(v) && !looksLikePlaceholder(CONFIG[k])) return;
+      CONFIG[k] = v;
+    });
+  }
 
   function isSupabaseConfigured() {
     var url = (CONFIG.SUPABASE_URL || '').trim();
     var key = (CONFIG.SUPABASE_ANON_KEY || '').trim();
     if (!url || !key) return false;
-    if (url.indexOf('YOUR_PROJECT') !== -1) return false;
-    if (key.indexOf('YOUR_SUPABASE') !== -1) return false;
+    if (looksLikePlaceholder(url) || looksLikePlaceholder(key)) return false;
+    if (url.indexOf('supabase.co') === -1 && url.indexOf('localhost') === -1) return false;
     if (key.length < 20) return false;
     return true;
   }
@@ -87,4 +95,15 @@
   window.CONFIG = CONFIG;
   window.PLANS = PLANS;
   window.isSupabaseConfigured = isSupabaseConfigured;
+  window.mergeConfig = mergeConfig;
+
+  // Debug helper in console
+  window.__debugInvoiceFlowConfig = function () {
+    console.log({
+      url: CONFIG.SUPABASE_URL,
+      keyLen: (CONFIG.SUPABASE_ANON_KEY || '').length,
+      keyPrefix: (CONFIG.SUPABASE_ANON_KEY || '').slice(0, 12),
+      configured: isSupabaseConfigured()
+    });
+  };
 })();

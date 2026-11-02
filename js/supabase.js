@@ -2,8 +2,6 @@
  * InvoiceFlow — Supabase client + data layer
  */
 
-const { createClient } = supabase;
-
 let sb = null;
 let currentUser = null;
 let currentProfile = null;
@@ -13,14 +11,48 @@ function initSupabase() {
     console.error('CONFIG is not defined — ensure js/config.js loads before supabase.js');
     return null;
   }
-  var ok = typeof isSupabaseConfigured === 'function'
-    ? isSupabaseConfigured()
-    : (CONFIG.SUPABASE_URL && String(CONFIG.SUPABASE_URL).indexOf('YOUR_PROJECT') === -1);
+
+  var url = (CONFIG.SUPABASE_URL || '').trim();
+  var key = (CONFIG.SUPABASE_ANON_KEY || '').trim();
+  console.log('[InvoiceFlow] Supabase URL:', url);
+  console.log('[InvoiceFlow] Anon key length:', key.length, 'prefix:', key.slice(0, 10));
+
+  var ok = typeof isSupabaseConfigured === 'function' ? isSupabaseConfigured() : false;
   if (!ok) {
-    console.warn('Supabase not configured. Create js/config.local.js with your keys (see config.local.example.js)');
+    // Last chance: accept any supabase.co URL + long key
+    ok = url.indexOf('supabase.co') !== -1 && key.length > 30 && key.indexOf('YOUR_') === -1;
+  }
+  if (!ok) {
+    console.warn('[InvoiceFlow] Supabase not configured.', {
+      url: url,
+      keyLength: key.length,
+      tip: 'Edit js/config.js defaults or js/config.local.js with real Project URL + anon key'
+    });
     return null;
   }
-  sb = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+
+  var createClientFn = null;
+  try {
+    if (typeof supabase !== 'undefined' && supabase.createClient) {
+      createClientFn = supabase.createClient.bind(supabase);
+    } else if (typeof supabase !== 'undefined' && typeof supabase === 'object') {
+      createClientFn = supabase.createClient;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  if (!createClientFn) {
+    console.error('[InvoiceFlow] supabase-js CDN not loaded. Check network / script tag.');
+    return null;
+  }
+
+  try {
+    sb = createClientFn(url, key);
+    console.log('[InvoiceFlow] Supabase client ready');
+  } catch (e) {
+    console.error('[InvoiceFlow] createClient failed', e);
+    sb = null;
+  }
   return sb;
 }
 

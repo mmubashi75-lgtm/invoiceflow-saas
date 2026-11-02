@@ -224,7 +224,7 @@
         return;
       }
       if (!IF.client) {
-        errEl.textContent = 'Supabase is not configured. Add keys in js/config.js or .env';
+        errEl.textContent = 'Supabase not ready. Open console, run __debugInvoiceFlowConfig(), fix js/config.js keys, hard-refresh.';
         errEl.classList.remove('hidden');
         return;
       }
@@ -268,7 +268,7 @@
         return;
       }
       if (!IF.client) {
-        errEl.textContent = 'Supabase is not configured. Add your keys in js/config.js or .env';
+        errEl.textContent = 'Supabase not ready. Open console, run __debugInvoiceFlowConfig(), fix js/config.js keys, hard-refresh.';
         errEl.classList.remove('hidden');
         return;
       }
