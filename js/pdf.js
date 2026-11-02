@@ -5,7 +5,18 @@
 const IFPdf = {
   async generate(invoice, customer, settings, options = {}) {
     const { jsPDF } = window.jspdf;
-    const totals = IFData.calcInvoiceTotals(invoice);
+    let totals;
+    if (typeof IF !== 'undefined' && IF.calcTotals) {
+      totals = IF.calcTotals(invoice);
+    } else {
+      const items = invoice.items || [];
+      const subtotal = items.reduce((s, it) => s + (Number(it.qty)||0)*(Number(it.price)||0), 0);
+      const discount = Number(invoice.discount)||0;
+      const after = Math.max(0, subtotal - discount);
+      const tax = after * ((Number(invoice.tax_rate || invoice.taxRate)||0)/100);
+      const shipping = Number(invoice.shipping)||0;
+      totals = { subtotal, discount, tax, shipping, total: after + tax + shipping, balance: after + tax + shipping };
+    }
     const currency = settings.currencySymbol || '$';
     const template = options.template || settings.template || 'modern';
 
@@ -81,6 +92,12 @@ const IFPdf = {
     if (template === 'minimal') {
       return this.minimalTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress });
     }
+    if (template === 'bold') {
+      return this.boldTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress });
+    }
+    if (template === 'elegant') {
+      return this.elegantTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress });
+    }
     // default modern
     return this.modernTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress });
   },
@@ -97,8 +114,8 @@ const IFPdf = {
           <div style="text-align:right;">
             <div style="font-size:28px;font-weight:700;color:${brand};letter-spacing:-0.5px;">INVOICE</div>
             <div style="margin-top:8px;font-size:14px;color:#334155;"><strong>${IFUtils.escapeHtml(invoice.number)}</strong></div>
-            <div style="font-size:13px;color:#64748b;margin-top:4px;">Issue: ${IFUtils.formatDate(invoice.issueDate)}</div>
-            <div style="font-size:13px;color:#64748b;">Due: ${IFUtils.formatDate(invoice.dueDate)}</div>
+            <div style="font-size:13px;color:#64748b;margin-top:4px;">Issue: ${IFUtils.formatDate(invoice.issueDate || invoice.issue_date)}</div>
+            <div style="font-size:13px;color:#64748b;">Due: ${IFUtils.formatDate(invoice.dueDate || invoice.due_date)}</div>
           </div>
         </div>
 
@@ -193,8 +210,8 @@ const IFPdf = {
           </div>
           <div style="text-align:right;">
             <div style="font-size:20px;font-weight:700;">${IFUtils.escapeHtml(invoice.number)}</div>
-            <div style="font-size:13px;color:#64748b;">Date: ${IFUtils.formatDate(invoice.issueDate)}</div>
-            <div style="font-size:13px;color:#64748b;">Due: ${IFUtils.formatDate(invoice.dueDate)}</div>
+            <div style="font-size:13px;color:#64748b;">Date: ${IFUtils.formatDate(invoice.issueDate || invoice.issue_date)}</div>
+            <div style="font-size:13px;color:#64748b;">Due: ${IFUtils.formatDate(invoice.dueDate || invoice.due_date)}</div>
           </div>
         </div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
@@ -239,8 +256,8 @@ const IFPdf = {
           </div>
         </div>
         <div style="display:flex;gap:24px;margin-bottom:32px;font-size:13px;color:#64748b;">
-          <div>Issued <strong style="color:#0f172a;">${IFUtils.formatDate(invoice.issueDate)}</strong></div>
-          <div>Due <strong style="color:#0f172a;">${IFUtils.formatDate(invoice.dueDate)}</strong></div>
+          <div>Issued <strong style="color:#0f172a;">${IFUtils.formatDate(invoice.issueDate || invoice.issue_date)}</strong></div>
+          <div>Due <strong style="color:#0f172a;">${IFUtils.formatDate(invoice.dueDate || invoice.due_date)}</strong></div>
         </div>
         <table style="width:100%;border-collapse:collapse;">
           <thead>
@@ -259,7 +276,82 @@ const IFPdf = {
         </div>
       </div>
     `;
+  },
+
+  boldTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress }) {
+    return `
+      <div style="padding:40px 48px;width:794px;box-sizing:border-box;font-family:Inter,system-ui,sans-serif;">
+        <div style="background:${brand};color:#fff;padding:28px 32px;border-radius:12px;margin-bottom:28px;display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:20px;font-weight:700;">${IFUtils.escapeHtml(settings.companyName || 'Company')}</div>
+          <div style="text-align:right;">
+            <div style="font-size:26px;font-weight:800;letter-spacing:1px;">INVOICE</div>
+            <div style="opacity:0.9;margin-top:4px;">${IFUtils.escapeHtml(invoice.number || '')}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:40px;margin-bottom:24px;">
+          <div style="flex:1;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;">From</div>
+            <div style="font-size:13px;color:#64748b;margin-top:4px;">${addressLines}</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;color:#94a3b8;">Bill To</div>
+            <div style="font-weight:600;margin-top:4px;">${IFUtils.escapeHtml(customer?.name || '—')}</div>
+            <div style="font-size:13px;color:#64748b;">${custAddress}</div>
+          </div>
+          <div>
+            <div style="font-size:13px;color:#64748b;">Issue: ${IFUtils.formatDate(invoice.issueDate || invoice.issue_date)}</div>
+            <div style="font-size:13px;color:#64748b;">Due: ${IFUtils.formatDate(invoice.dueDate || invoice.due_date)}</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
+          <thead><tr style="background:${brand};color:#fff;">
+            <th style="text-align:left;padding:12px;">Item</th>
+            <th style="text-align:right;padding:12px;">Qty</th>
+            <th style="text-align:right;padding:12px;">Price</th>
+            <th style="text-align:right;padding:12px;">Amount</th>
+          </tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <div style="text-align:right;font-size:18px;font-weight:800;color:${brand};">
+          Total: ${currency}${Number(totals.total).toFixed(2)}
+        </div>
+      </div>`;
+  },
+
+  elegantTemplate({ logoHtml, brand, invoice, customer, settings, totals, currency, itemsHtml, addressLines, custAddress }) {
+    return `
+      <div style="padding:48px 56px;width:794px;box-sizing:border-box;font-family:Georgia,'Times New Roman',serif;color:#1e293b;border-top:6px solid ${brand};">
+        <div style="text-align:center;margin-bottom:36px;">
+          <div style="margin-bottom:12px;">${logoHtml}</div>
+          <div style="font-size:32px;letter-spacing:4px;font-weight:400;color:${brand};">INVOICE</div>
+          <div style="margin-top:8px;font-size:14px;color:#64748b;">${IFUtils.escapeHtml(invoice.number || '')} · ${IFUtils.formatDate(invoice.issueDate || invoice.issue_date)}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:32px;font-size:14px;">
+          <div>
+            <div style="color:#94a3b8;font-size:11px;letter-spacing:1px;text-transform:uppercase;">From</div>
+            <div style="margin-top:6px;">${IFUtils.escapeHtml(settings.companyName || '')}<br>${addressLines}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="color:#94a3b8;font-size:11px;letter-spacing:1px;text-transform:uppercase;">Bill To</div>
+            <div style="margin-top:6px;">${IFUtils.escapeHtml(customer?.name || '—')}<br>${custAddress}</div>
+          </div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;margin-bottom:24px;font-size:14px;">
+          <thead><tr style="border-bottom:2px solid ${brand};">
+            <th style="text-align:left;padding:10px 0;">Description</th>
+            <th style="text-align:right;padding:10px 0;">Qty</th>
+            <th style="text-align:right;padding:10px 0;">Rate</th>
+            <th style="text-align:right;padding:10px 0;">Amount</th>
+          </tr></thead>
+          <tbody>${itemsHtml}</tbody>
+        </table>
+        <div style="text-align:right;font-size:20px;color:${brand};">
+          Amount Due: ${currency}${Number(totals.total).toFixed(2)}
+        </div>
+        <div style="margin-top:40px;text-align:center;font-size:12px;color:#94a3b8;">Thank you for your business</div>
+      </div>`;
   }
+
 };
 
 window.IFPdf = IFPdf;

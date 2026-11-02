@@ -1165,6 +1165,16 @@
             <label class="form-label">Due Date</label>
             <input id="ib-due" type="date" class="form-input" value="${inv?.due_date || IFUtils.addDays(IFUtils.today(), 14)}">
           </div>
+          <div class="sm:col-span-2">
+            <label class="form-label">PDF Template</label>
+            <select id="ib-template" class="form-select">
+              ${['modern','classic','minimal','bold','elegant'].map(id => {
+                const labels = { modern:'Modern', classic:'Classic', minimal:'Minimal', bold:'Bold', elegant:'Elegant' };
+                const sel = (inv?.template || profile.default_template || 'modern') === id ? 'selected' : '';
+                return '<option value="'+id+'" '+sel+'>'+labels[id]+'</option>';
+              }).join('')}
+            </select>
+          </div>
         </div>
 
         <div>
@@ -1229,8 +1239,9 @@
     const container = document.getElementById('ib-line-items');
     if (!container) return;
     const sym = IF.currentProfile?.currency_symbol || '$';
+    // Full rebuild only when adding/removing rows — NOT on every keystroke
     container.innerHTML = builderItems.map((item, idx) => `
-      <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+      <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-start p-3 rounded-lg border border-slate-200 dark:border-slate-700" data-line-idx="${idx}">
         <div class="sm:col-span-5 space-y-1">
           <input class="form-input" placeholder="Item name" value="${IFUtils.escapeHtml(item.name)}"
             oninput="App.updateLineItem(${idx}, 'name', this.value)">
@@ -1245,7 +1256,7 @@
           <input type="number" min="0" step="0.01" class="form-input" value="${item.price}"
             oninput="App.updateLineItem(${idx}, 'price', this.value)">
         </div>
-        <div class="sm:col-span-2 flex items-center h-10 text-sm font-medium">
+        <div class="sm:col-span-2 flex items-center h-10 text-sm font-medium" data-line-amount="${idx}">
           ${IFUtils.formatCurrency((Number(item.qty)||0) * (Number(item.price)||0), sym)}
         </div>
         <div class="sm:col-span-1 flex items-center">
@@ -1263,7 +1274,14 @@
     } else {
       builderItems[idx][field] = value;
     }
-    App.renderLineItems();
+    // Do NOT re-render inputs (that steals focus after each character).
+    // Only refresh the amount cell + totals.
+    const sym = IF.currentProfile?.currency_symbol || '$';
+    const amtEl = document.querySelector('[data-line-amount="' + idx + '"]');
+    if (amtEl) {
+      const it = builderItems[idx];
+      amtEl.textContent = IFUtils.formatCurrency((Number(it.qty) || 0) * (Number(it.price) || 0), sym);
+    }
     App.updateBuilderTotals();
   }
 
@@ -1391,7 +1409,8 @@
       tax_rate: parseFloat(document.getElementById('ib-tax').value) || 0,
       shipping: parseFloat(document.getElementById('ib-shipping').value) || 0,
       notes: document.getElementById('ib-notes')?.value || '',
-      terms: document.getElementById('ib-terms')?.value || ''
+      terms: document.getElementById('ib-terms')?.value || '',
+      template: document.getElementById('ib-template')?.value || 'modern'
     };
 
     if (!payload.customer_id) {
@@ -1428,25 +1447,120 @@
     if (!inv) { navigate('invoices'); return; }
     const status = IF.deriveStatus(inv);
     const totals = IF.calcTotals(inv);
-    const cust = customers.find(c => c.id === inv.customer_id);
-    const sym = IF.currentProfile?.currency_symbol || '$';
+    const cust = customers.find(c => c.id === inv.customer_id) || {};
+    const profile = IF.currentProfile || {};
+    const sym = profile.currency_symbol || '$';
+    const items = inv.items || [];
+
+    const itemsRows = items.length
+      ? items.map(it => {
+          const qty = Number(it.qty) || 0;
+          const price = Number(it.price) || 0;
+          const amount = qty * price;
+          return `<tr class="border-b border-slate-100 dark:border-slate-800">
+            <td class="py-3 pr-3">
+              <div class="font-medium">${IFUtils.escapeHtml(it.name || '—')}</div>
+              ${it.description ? `<div class="text-xs text-slate-500 mt-0.5">${IFUtils.escapeHtml(it.description)}</div>` : ''}
+            </td>
+            <td class="py-3 text-center text-slate-600 dark:text-slate-400">${qty}</td>
+            <td class="py-3 text-right text-slate-600 dark:text-slate-400">${IFUtils.formatCurrency(price, sym)}</td>
+            <td class="py-3 text-right font-medium">${IFUtils.formatCurrency(amount, sym)}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="4" class="py-8 text-center text-slate-400">No line items</td></tr>`;
 
     document.getElementById('view-invoice-detail').innerHTML = `
       <div class="max-w-3xl mx-auto">
-        <div class="flex justify-between mb-6">
-          <div>
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div class="flex items-center gap-3">
             <button class="btn btn-ghost btn-sm" onclick="App.navigate('invoices')">← Back</button>
-            <h2 class="text-xl font-semibold">${IFUtils.escapeHtml(inv.number)} <span class="${IFUtils.statusClass(status)}">${IFUtils.statusLabel(status)}</span></h2>
+            <div>
+              <h2 class="text-xl font-semibold flex flex-wrap items-center gap-2">
+                ${IFUtils.escapeHtml(inv.number)}
+                <span class="${IFUtils.statusClass(status)}">${IFUtils.statusLabel(status)}</span>
+              </h2>
+              <p class="text-xs text-slate-500 mt-0.5">Template: ${IFUtils.escapeHtml(inv.template || 'modern')}</p>
+            </div>
           </div>
-          <div class="flex gap-2">
+          <div class="flex flex-wrap gap-2">
             <button class="btn btn-secondary btn-sm" onclick="App.editInvoice('${inv.id}')">Edit</button>
-            <button class="btn btn-primary btn-sm" onclick="App.downloadPdf('${inv.id}')">PDF</button>
+            <button class="btn btn-primary btn-sm" onclick="App.downloadPdf('${inv.id}')">⬇ Download PDF</button>
           </div>
         </div>
-        <div class="card p-6 space-y-4">
-          <p><strong>Customer:</strong> ${IFUtils.escapeHtml(cust?.name || '—')}</p>
-          <p><strong>Total:</strong> ${IFUtils.formatCurrency(totals.total, sym)} · <strong>Balance:</strong> ${IFUtils.formatCurrency(totals.balance, sym)}</p>
-          <pre class="text-xs bg-slate-50 dark:bg-slate-900 p-3 rounded overflow-auto">${JSON.stringify(inv.items, null, 2)}</pre>
+
+        <div class="card overflow-hidden">
+          <!-- Header -->
+          <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-5 flex flex-wrap justify-between gap-4">
+            <div>
+              <div class="text-lg font-bold">${IFUtils.escapeHtml(profile.company_name || profile.full_name || 'InvoiceFlow')}</div>
+              ${profile.email ? `<div class="text-sm text-blue-100 mt-1">${IFUtils.escapeHtml(profile.email)}</div>` : ''}
+              ${profile.phone ? `<div class="text-sm text-blue-100">${IFUtils.escapeHtml(profile.phone)}</div>` : ''}
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-bold tracking-wide">INVOICE</div>
+              <div class="text-sm text-blue-100 mt-1">${IFUtils.escapeHtml(inv.number)}</div>
+            </div>
+          </div>
+
+          <div class="p-6 space-y-6">
+            <!-- Meta + parties -->
+            <div class="grid sm:grid-cols-2 gap-6">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">Bill To</div>
+                <div class="font-semibold text-base">${IFUtils.escapeHtml(cust.name || '—')}</div>
+                ${cust.company ? `<div class="text-sm text-slate-600 dark:text-slate-400">${IFUtils.escapeHtml(cust.company)}</div>` : ''}
+                ${cust.email ? `<div class="text-sm text-slate-500">${IFUtils.escapeHtml(cust.email)}</div>` : ''}
+                ${cust.phone ? `<div class="text-sm text-slate-500">${IFUtils.escapeHtml(cust.phone)}</div>` : ''}
+                ${cust.address ? `<div class="text-sm text-slate-500 mt-1 whitespace-pre-line">${IFUtils.escapeHtml(cust.address)}</div>` : ''}
+              </div>
+              <div class="sm:text-right space-y-1 text-sm">
+                <div class="flex sm:justify-end gap-2"><span class="text-slate-500">Issue date</span><span class="font-medium">${IFUtils.formatDate(inv.issue_date)}</span></div>
+                <div class="flex sm:justify-end gap-2"><span class="text-slate-500">Due date</span><span class="font-medium">${IFUtils.formatDate(inv.due_date)}</span></div>
+                <div class="flex sm:justify-end gap-2 items-center"><span class="text-slate-500">Status</span><span class="${IFUtils.statusClass(status)}">${IFUtils.statusLabel(status)}</span></div>
+              </div>
+            </div>
+
+            <!-- Line items table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="bg-slate-50 dark:bg-slate-900/60 text-slate-500 text-xs uppercase tracking-wide">
+                    <th class="text-left py-3 px-4 font-semibold">Item</th>
+                    <th class="text-center py-3 px-3 font-semibold w-20">Qty</th>
+                    <th class="text-right py-3 px-3 font-semibold w-28">Price</th>
+                    <th class="text-right py-3 px-4 font-semibold w-28">Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="px-4">
+                  ${itemsRows.replace(/class="py-3/g, 'class="py-3 px-4')}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Totals -->
+            <div class="flex justify-end">
+              <div class="w-full max-w-xs space-y-2 text-sm">
+                <div class="flex justify-between text-slate-600 dark:text-slate-400">
+                  <span>Subtotal</span>
+                  <span>${IFUtils.formatCurrency(totals.subtotal, sym)}</span>
+                </div>
+                ${(Number(inv.discount) || 0) > 0 ? `<div class="flex justify-between text-slate-600 dark:text-slate-400"><span>Discount</span><span>− ${IFUtils.formatCurrency(totals.discount || inv.discount, sym)}</span></div>` : ''}
+                ${(Number(inv.tax_rate) || 0) > 0 ? `<div class="flex justify-between text-slate-600 dark:text-slate-400"><span>Tax (${inv.tax_rate}%)</span><span>${IFUtils.formatCurrency(totals.tax, sym)}</span></div>` : ''}
+                ${(Number(inv.shipping) || 0) > 0 ? `<div class="flex justify-between text-slate-600 dark:text-slate-400"><span>Shipping</span><span>${IFUtils.formatCurrency(totals.shipping || inv.shipping, sym)}</span></div>` : ''}
+                <div class="flex justify-between text-base font-bold pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span>Total</span>
+                  <span class="text-blue-600">${IFUtils.formatCurrency(totals.total, sym)}</span>
+                </div>
+                <div class="flex justify-between font-medium ${totals.balance > 0 ? 'text-amber-600' : 'text-emerald-600'}">
+                  <span>Balance due</span>
+                  <span>${IFUtils.formatCurrency(totals.balance, sym)}</span>
+                </div>
+              </div>
+            </div>
+
+            ${inv.notes ? `<div class="pt-2 border-t border-slate-100 dark:border-slate-800"><div class="text-xs font-semibold uppercase text-slate-400 mb-1">Notes</div><p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">${IFUtils.escapeHtml(inv.notes)}</p></div>` : ''}
+            ${inv.terms ? `<div><div class="text-xs font-semibold uppercase text-slate-400 mb-1">Terms</div><p class="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-line">${IFUtils.escapeHtml(inv.terms)}</p></div>` : ''}
+          </div>
         </div>
       </div>`;
   }
@@ -1456,25 +1570,30 @@
     if (!inv) return;
     const customer = customers.find(c => c.id === inv.customer_id) || {};
     const settings = {
-      companyName: IF.currentProfile?.company_name,
-      address: IF.currentProfile?.address,
-      email: IF.currentProfile?.email,
-      phone: IF.currentProfile?.phone,
-      brandColor: IF.currentProfile?.brand_color,
+      companyName: IF.currentProfile?.company_name || IF.currentProfile?.full_name || 'Company',
+      address: IF.currentProfile?.address || '',
+      email: IF.currentProfile?.email || '',
+      phone: IF.currentProfile?.phone || '',
+      brandColor: IF.currentProfile?.brand_color || '#2563eb',
       currencySymbol: IF.currentProfile?.currency_symbol || '$',
-      template: IF.currentProfile?.template || 'modern',
-      logo: IF.currentProfile?.logo_url
+      template: inv.template || IF.currentProfile?.default_template || 'modern',
+      logo: IF.currentProfile?.logo_url || ''
     };
-    // Adapt shape for existing PDF generator
     const adapted = {
       ...inv,
       issueDate: inv.issue_date,
       dueDate: inv.due_date,
       taxRate: inv.tax_rate,
-      discountType: inv.discount_type
+      discountType: inv.discount_type,
+      status: inv.status
     };
     IFUtils.toast('Generating PDF…');
-    await IFPdf.generate(adapted, customer, settings);
+    try {
+      await IFPdf.generate(adapted, customer, settings, { template: settings.template });
+    } catch (e) {
+      console.error(e);
+      IFUtils.toast(e.message || 'PDF failed', 'error');
+    }
   }
 
   // ─── Theme & sidebar ───────────────────────────────────────────────────
